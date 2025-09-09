@@ -2,7 +2,6 @@ name: Infrastructure Changes
 
 permissions:
   contents: read
-  pull-requests: write
   id-token: write
 
 on:
@@ -107,39 +106,6 @@ jobs:
           terraform destroy
         fi
       working-directory: ./terraform
-
-    - name: Comment PR
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const output = `## 🏗️ Infrastructure Changes
-          
-          **Terraform Action**: ${{ github.event.inputs.terraform_action || 'plan' }}
-          **Status**: ${{ steps.plan.outcome || steps.apply.outcome || steps.destroy.outcome }}
-          
-          ### 📋 Plan Output
-          \`\`\`
-          ${{ steps.plan.outputs.stdout }}
-          \`\`\`
-          
-          ### ⚠️ Important Notes
-          - This workflow only runs on infrastructure changes
-          - Use manual trigger for apply/destroy operations
-          - Always review changes before applying
-          
-          ### 🚀 Next Steps
-          - Review the plan output above
-          - If changes look good, use "workflow_dispatch" to apply
-          - Monitor the deployment in AWS Console`;
-          
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: output
-          });
-
     - name: Infrastructure Summary
       if: always()
       run: |

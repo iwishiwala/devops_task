@@ -2,7 +2,6 @@ name: Deploy to ECS
 
 permissions:
   contents: read
-  pull-requests: write
   id-token: write
 
 on:
@@ -359,67 +358,3 @@ jobs:
         echo "🔗 API Endpoint: http://$ALB_DNS/api"
         echo "📊 Monitoring Dashboard: https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=takehome-eks-dashboard"
 
-    - name: Comment on PR
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      continue-on-error: true
-      with:
-        script: |
-          try {
-            console.log('🔍 Attempting to comment on PR...');
-            
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              issue_number: context.issue.number,
-            });
-            
-            const botComment = comments.find(comment => 
-              comment.user.type === 'Bot' && comment.body.includes('🚀 Application deployed successfully!')
-            );
-            
-            const commentBody = `## 🚀 Deployment Successful!
-            
-            **Application URL:** ${{ steps.get-url.outputs.url }}
-            **Image:** ${{ steps.build-image.outputs.image }}
-            
-            ### ✅ Health Checks Passed
-            - ✅ Basic connectivity test
-            - ✅ Application health endpoint (/health)
-            - ✅ Readiness endpoint (/ready)
-            - ✅ API endpoint (/api)
-            - ✅ Load balancer target health
-            - ✅ ECS service status
-            - ✅ Performance test
-            
-            ### 📊 Monitoring
-            **CloudWatch Dashboard:** https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=takehome-eks-dashboard
-            
-            ### 🔗 Quick Links
-            - [Health Check](${{ steps.get-url.outputs.url }}/health)
-            - [API Endpoint](${{ steps.get-url.outputs.url }}/api)
-            - [Application](${{ steps.get-url.outputs.url }})`;
-            
-            if (botComment) {
-              console.log('📝 Updating existing comment...');
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                issue_number: context.issue.number,
-                comment_id: botComment.id,
-                body: commentBody
-              });
-              console.log('✅ Comment updated successfully');
-            } else {
-              console.log('📝 Creating new comment...');
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                issue_number: context.issue.number,
-                body: commentBody
-              });
-              console.log('✅ Comment created successfully');
-            }
-          } catch (error) {
-            console.log('⚠️  Failed to comment on PR:', error.message);
-            console.log('📋 Deployment completed successfully, but PR comment failed due to permissions.');
-            console.log('🔗 Application URL:', '${{ steps.get-url.outputs.url }}');
-            console.log('📊 Monitoring Dashboard: https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=takehome-eks-dashboard');
-          }
