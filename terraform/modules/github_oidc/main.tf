@@ -41,7 +41,7 @@ resource "aws_iam_role" "github_actions" {
           }
           StringLike = {
             "token.actions.githubusercontent.com:sub" = [
-              for branch in var.github_branches : "repo:${local.github_repo}:ref:refs/heads/${branch}"
+              "repo:${local.github_repo}:*"
             ]
           }
         }
