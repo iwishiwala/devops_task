@@ -50,7 +50,7 @@ test_endpoint() {
     
     response=$(curl -s -w "\n%{http_code}" "$URL$endpoint" || echo -e "\n000")
     http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n -1)
+    body=$(echo "$response" | sed '$d')
     
     if [ "$http_code" = "$expected_status" ]; then
         print_status "SUCCESS" "$description - HTTP $http_code"

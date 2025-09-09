@@ -11,60 +11,6 @@ module "vpc" {
   tags = local.tags
 }
 
-# EKS Cluster + Node Group (COMMENTED OUT - Using ECS Fargate instead)
-# module "eks" {
-#   source = "./modules/eks"
-
-#   cluster_name    = var.cluster_name
-#   cluster_version = "1.28"
-#   private_subnets = module.vpc.private_subnets
-#   vpc_id          = module.vpc.vpc_id
-
-#   node_group_desired_capacity = var.node_group_desired_capacity
-#   node_group_min_size         = var.node_group_min_size
-#   node_group_max_size         = var.node_group_max_size
-#   instance_types              = var.instance_types
-
-#   tags = {
-#     Environment = "takehome"
-#     Project     = "devops-takehome"
-#   }
-# }
-
-# # EKS Cluster Data Sources (needed for kubernetes + helm)
-# module "eks_data" {
-#   source = "./modules/eks-data"
-
-#   cluster_id     = module.eks.cluster_id
-#   eks_dependency = module.eks
-# }
-
-# provider "kubernetes" {
-#   host                   = module.eks_data.cluster_endpoint
-#   token                  = module.eks_data.cluster_auth_token
-#   cluster_ca_certificate = base64decode(module.eks_data.cluster_ca_certificate)
-# }
-
-# # AWS Load Balancer Controller (ALB Ingress Controller)
-
-# # IAM/IRSA for ALB Controller
-# module "iam_irsa" {
-#   source = "./modules/iam-irsa"
-
-#   cluster_oidc_issuer_url = module.eks.cluster_oidc_issuer_url
-#   oidc_provider_arn       = module.eks.oidc_provider_arn
-#   role_name_prefix        = "alb-controller"
-# }
-
-# # Deploy ALB Controller via Helm
-# module "helm" {
-#   source = "./modules/helm"
-
-#   cluster_id      = module.eks.cluster_id
-#   aws_region      = var.aws_region
-#   vpc_id          = module.vpc.vpc_id
-#   irsa_dependency = module.iam_irsa
-# }
 
 # ECR Repository for Docker images
 module "ecr" {

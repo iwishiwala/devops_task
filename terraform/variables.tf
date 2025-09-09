@@ -11,7 +11,7 @@ variable "aws_profile" {
 }
 
 variable "cluster_name" {
-  description = "EKS cluster name"
+  description = "ECS cluster name"
   type        = string
   default     = "takehome-eks"
 }
@@ -32,24 +32,4 @@ variable "azs" {
   description = "List of AZs to use"
   type        = list(string)
   default     = ["us-east-1a", "us-east-1b", "us-east-1c"]
-}
-
-variable "node_group_desired_capacity" {
-  description = "Desired size for EKS node group"
-  type        = number
-  default     = 1
-}
-
-variable "node_group_min_size" {
-  type    = number
-  default = 1
-}
-variable "node_group_max_size" {
-  type    = number
-  default = 2
-}
-
-variable "instance_types" {
-  type    = list(string)
-  default = ["t4g.micro"]
 }
