@@ -1,9 +1,11 @@
 const express = require('express');
+const path = require('path');
 const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'app/public')));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -15,8 +17,13 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Main route
+// Main route - serve HTML page
 app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'app/public/index.html'));
+});
+
+// API route for JSON response
+app.get('/api', (req, res) => {
   res.json({
     message: 'Welcome to DevOps Takehome Application!',
     version: '1.0.0',
