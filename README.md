@@ -82,3 +82,4 @@ To debug issues:
 - IAM permissions follow the principle of least privilege
 - ECR images are scanned for vulnerabilities
 - Secrets are encrypted and only accessible to the workflow
+# Trigger deployment
