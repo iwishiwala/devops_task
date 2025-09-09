@@ -12,6 +12,10 @@ env:
   ECS_SERVICE: takehome-eks-service
   ECS_CLUSTER: takehome-eks
   ECS_TASK_DEFINITION: takehome-eks-task
+  ECS_TASK_FAMILY: takehome-eks-task
+  ECS_EXECUTION_ROLE_ARN: arn:aws:iam::850451907233:role/takehome-eks-ecs-task-execution-role
+  ECS_TASK_ROLE_ARN: arn:aws:iam::850451907233:role/takehome-eks-ecs-task-role
+  ECS_LOG_GROUP: /ecs/takehome-eks
   CONTAINER_NAME: app
 
 jobs:
@@ -50,13 +54,53 @@ jobs:
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-    - name: Fill in the new image ID in the Amazon ECS task definition
+    - name: Generate ECS task definition
       id: task-def
-      uses: aws-actions/amazon-ecs-render-task-definition@v1
-      with:
-        task-definition: .aws/task-definition.json
-        container-name: ${{ env.CONTAINER_NAME }}
-        image: ${{ steps.build-image.outputs.image }}
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Generate task definition dynamically
+        cat > task-definition.json << EOF
+        {
+          "family": "$ECS_TASK_FAMILY",
+          "networkMode": "awsvpc",
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512",
+          "executionRoleArn": "$ECS_EXECUTION_ROLE_ARN",
+          "taskRoleArn": "$ECS_TASK_ROLE_ARN",
+          "containerDefinitions": [
+            {
+              "name": "app",
+              "image": "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG",
+              "portMappings": [
+                {
+                  "containerPort": 3000,
+                  "hostPort": 3000,
+                  "protocol": "tcp"
+                }
+              ],
+              "essential": true,
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "$ECS_LOG_GROUP",
+                  "awslogs-region": "$AWS_REGION",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              },
+              "environment": [
+                {
+                  "name": "NODE_ENV",
+                  "value": "production"
+                }
+              ]
+            }
+          ]
+        }
+        EOF
+        echo "task-definition=task-definition.json" >> $GITHUB_OUTPUT
 
     - name: Deploy Amazon ECS task definition
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1

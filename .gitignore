@@ -10,6 +10,7 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 .aws/
+task-definition.json
 .env
 .env.local
 .env.development.local
