@@ -100,8 +100,8 @@ module "ecs" {
 
   # Container configuration
   container_image = "${module.ecr.repository_url}:latest"
-  container_port  = 80
-  host_port       = 80  # Must match container_port for Fargate awsvpc mode
+  container_port  = 3000
+  host_port       = 3000  # Must match container_port for Fargate awsvpc mode
 
   # Free Tier optimized settings
   cpu    = 256 # 0.25 vCPU - well within 40 GB-hours/month
