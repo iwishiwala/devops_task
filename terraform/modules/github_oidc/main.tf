@@ -1,3 +1,21 @@
+# Auto-detect GitHub repository from git remote if not provided
+data "external" "git_remote" {
+  count = var.github_repo == "" ? 1 : 0
+  program = ["bash", "-c", <<-EOT
+    REPO=$(git remote get-url origin 2>/dev/null | sed -n 's/.*github.com[:/]\([^.]*\).*/\1/p')
+    if [ -z "$REPO" ]; then
+      echo '{"error": "Could not detect GitHub repository from git remote"}' >&2
+      exit 1
+    fi
+    echo "{\"repo\": \"$REPO\"}"
+  EOT
+  ]
+}
+
+locals {
+  github_repo = var.github_repo != "" ? var.github_repo : (length(data.external.git_remote) > 0 ? data.external.git_remote[0].result.repo : "unknown/unknown")
+}
+
 resource "aws_iam_openid_connect_provider" "github" {
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]
@@ -18,8 +36,13 @@ resource "aws_iam_role" "github_actions" {
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"
+            "token.actions.githubusercontent.com:sub" = [
+              for branch in var.github_branches : "repo:${local.github_repo}:ref:refs/heads/${branch}"
+            ]
           }
         }
       }

@@ -127,9 +127,14 @@ module "ecs" {
 module "github_oidc" {
   source = "./modules/github_oidc"
 
-  role_name     = "github-actions"
-  github_repo   = "org/repo"
-  github_branch = "main"
+  # Auto-detects repository from git remote if not specified
+  # github_repo = "iwishiwala/devops_task"  # Optional: override auto-detection
+  
+  # Supports multiple branches
+  github_branches = ["main", "develop"]
+  
+  # Role name (optional, defaults to "github-actions")
+  role_name = "github-actions"
 
   tags = {
     Environment = "takehome"

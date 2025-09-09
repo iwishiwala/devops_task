@@ -87,3 +87,13 @@ output "github_actions_role_arn" {
   description = "GitHub Actions IAM Role ARN"
   value       = module.github_oidc.github_actions_role_arn
 }
+
+output "github_repo" {
+  description = "GitHub repository detected for OIDC authentication"
+  value       = module.github_oidc.github_repo
+}
+
+output "github_branches" {
+  description = "GitHub branches that can assume the OIDC role"
+  value       = module.github_oidc.github_branches
+}

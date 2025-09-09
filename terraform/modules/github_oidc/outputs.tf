@@ -12,3 +12,13 @@ output "oidc_provider_arn" {
   description = "OIDC Provider ARN for GitHub"
   value       = aws_iam_openid_connect_provider.github.arn
 }
+
+output "github_repo" {
+  description = "GitHub repository that was detected or configured"
+  value       = local.github_repo
+}
+
+output "github_branches" {
+  description = "GitHub branches that can assume the role"
+  value       = var.github_branches
+}
