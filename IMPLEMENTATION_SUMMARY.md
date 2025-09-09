@@ -123,10 +123,13 @@
 
 ### **GitHub Actions CI/CD**
 - **OIDC Authentication**: No hardcoded credentials
+- **Smart Triggers**: Only deploys on application changes
+- **Separate Workflows**: Application vs Infrastructure pipelines
 - **Auto-Detection**: Automatically detects repository
 - **Multi-Branch Support**: Works with main and develop branches
 - **Docker Build**: Multi-stage builds with optimization
 - **ECS Deployment**: Zero-downtime deployments
+- **Manual Triggers**: Force deployment and infrastructure management
 
 ### **Blue-Green Deployments**
 - **ECS Service Updates**: Automatic task definition updates

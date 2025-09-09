@@ -362,6 +362,90 @@ graph TB
     ECR_FREE -->|Free tier| ECR_REG
 ```
 
+### Optimized Pipeline Flow
+
+```mermaid
+graph TD
+    A[Code Push to GitHub] --> B{File Type Check}
+    B -->|Application Files| C[Deploy to ECS Workflow]
+    B -->|Infrastructure Files| D[Infrastructure Workflow]
+    B -->|Documentation Only| E[Skip Deployment]
+    
+    C --> F[OIDC Authentication]
+    F --> G[Build Docker Image]
+    G --> H[Push to ECR]
+    H --> I[Generate Task Definition]
+    I --> J[Deploy to ECS]
+    J --> K[Wait for Service Stability]
+    K --> L[Health Check - Basic Connectivity]
+    L --> M[Health Check - Application Endpoints]
+    M --> N[Health Check - Infrastructure Status]
+    N --> O[Performance Test]
+    O --> P[Update PR Comment]
+    P --> Q[Deployment Complete]
+    
+    D --> R[Terraform Plan/Apply]
+    R --> S[Infrastructure Validation]
+    S --> T[Update Infrastructure]
+    
+    L -->|Fail| U[Rollback]
+    M -->|Fail| U
+    N -->|Fail| U
+    O -->|Fail| U
+    U --> V[Notify Failure]
+```
+
+### Pipeline Triggers
+
+```mermaid
+graph LR
+    subgraph "File Changes"
+        APP[Application Files]
+        INFRA[Infrastructure Files]
+        DOCS[Documentation Files]
+    end
+    
+    subgraph "Pipeline Triggers"
+        DEPLOY[Deploy to ECS]
+        INFRA_WF[Infrastructure Workflow]
+        SKIP[Skip Deployment]
+    end
+    
+    subgraph "Application Files"
+        INDEX[index.js]
+        PKG[package.json]
+        DOCKER[Dockerfile]
+        APP_DIR[app/**]
+    end
+    
+    subgraph "Infrastructure Files"
+        TF[terraform/**]
+        WF[workflow files]
+    end
+    
+    subgraph "Documentation Files"
+        README[README.md]
+        DOCS_DIR[docs/**]
+        SCRIPTS[scripts/**]
+    end
+    
+    APP --> DEPLOY
+    INFRA --> INFRA_WF
+    DOCS --> SKIP
+    
+    INDEX --> APP
+    PKG --> APP
+    DOCKER --> APP
+    APP_DIR --> APP
+    
+    TF --> INFRA
+    WF --> INFRA
+    
+    README --> DOCS
+    DOCS_DIR --> DOCS
+    SCRIPTS --> DOCS
+```
+
 ## How to Generate Visual Diagrams
 
 ### Option 1: GitHub/GitLab (Automatic)

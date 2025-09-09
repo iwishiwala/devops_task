@@ -140,26 +140,59 @@ graph LR
 
 ```mermaid
 graph TD
-    A[Code Push to GitHub] --> B[GitHub Actions Trigger]
-    B --> C[OIDC Authentication]
-    C --> D[Build Docker Image]
-    D --> E[Push to ECR]
-    E --> F[Generate Task Definition]
-    F --> G[Deploy to ECS]
-    G --> H[Wait for Service Stability]
-    H --> I[Health Check - Basic Connectivity]
-    I --> J[Health Check - Application Endpoints]
-    J --> K[Health Check - Infrastructure Status]
-    K --> L[Performance Test]
-    L --> M[Update PR Comment]
-    M --> N[Deployment Complete]
+    A[Code Push to GitHub] --> B{File Type Check}
+    B -->|Application Files| C[Deploy to ECS Workflow]
+    B -->|Infrastructure Files| D[Infrastructure Workflow]
+    B -->|Documentation Only| E[Skip Deployment]
     
-    I -->|Fail| O[Rollback]
-    J -->|Fail| O
-    K -->|Fail| O
-    L -->|Fail| O
-    O --> P[Notify Failure]
+    C --> F[OIDC Authentication]
+    F --> G[Build Docker Image]
+    G --> H[Push to ECR]
+    H --> I[Generate Task Definition]
+    I --> J[Deploy to ECS]
+    J --> K[Wait for Service Stability]
+    K --> L[Health Check - Basic Connectivity]
+    L --> M[Health Check - Application Endpoints]
+    M --> N[Health Check - Infrastructure Status]
+    N --> O[Performance Test]
+    O --> P[Update PR Comment]
+    P --> Q[Deployment Complete]
+    
+    D --> R[Terraform Plan/Apply]
+    R --> S[Infrastructure Validation]
+    S --> T[Update Infrastructure]
+    
+    L -->|Fail| U[Rollback]
+    M -->|Fail| U
+    N -->|Fail| U
+    O -->|Fail| U
+    U --> V[Notify Failure]
 ```
+
+### Pipeline Triggers
+
+#### **Application Deployment Pipeline** (`deploy-ecs.yml`)
+**Triggers on changes to:**
+- `index.js` - Main application code
+- `package.json` / `package-lock.json` - Dependencies
+- `Dockerfile` / `.dockerignore` - Container configuration
+- `app/**` - Application assets and static files
+- `.github/workflows/deploy-ecs.yml` - Pipeline itself
+
+**Manual Trigger:**
+- **Force Deploy**: Bypass path filters for emergency deployments
+- **Access**: GitHub Actions → Deploy to ECS → Run workflow
+
+#### **Infrastructure Pipeline** (`infrastructure.yml`)
+**Triggers on changes to:**
+- `terraform/**` - All Terraform configuration files
+- `.github/workflows/infrastructure.yml` - Pipeline itself
+
+**Manual Triggers:**
+- **Terraform Plan**: Preview infrastructure changes
+- **Terraform Apply**: Apply infrastructure changes
+- **Terraform Destroy**: Destroy infrastructure (use with caution)
+- **Auto-approve**: Skip confirmation prompts (use with caution)
 
 ## 🤔 Architecture Decisions & Tradeoffs
 
@@ -368,17 +401,53 @@ graph TD
 
 ### Step 5: Deploy Application
 
-1. **Push to GitHub**:
+#### **Automatic Deployment (Recommended)**
+1. **Push Application Changes**:
    ```bash
-   git add .
-   git commit -m "Initial deployment"
+   # Make changes to application files
+   git add index.js package.json app/
+   git commit -m "Update application"
    git push origin develop
    ```
 
-2. **Monitor deployment**:
-   - Check GitHub Actions tab for deployment progress
-   - Monitor CloudWatch dashboard for metrics
-   - Check ECS console for service status
+2. **Monitor Deployment**:
+   - Go to [GitHub Actions](https://github.com/iwishiwala/devops_task/actions)
+   - Watch the "Deploy to ECS" workflow
+   - Check for any errors
+
+#### **Manual Deployment (Emergency)**
+1. **Force Deployment**:
+   - Go to [GitHub Actions](https://github.com/iwishiwala/devops_task/actions)
+   - Click "Deploy to ECS" workflow
+   - Click "Run workflow"
+   - Check "Force deployment" option
+   - Click "Run workflow"
+
+#### **Infrastructure Changes**
+1. **Terraform Changes**:
+   ```bash
+   # Make infrastructure changes
+   git add terraform/
+   git commit -m "Update infrastructure"
+   git push origin develop
+   ```
+
+2. **Monitor Infrastructure**:
+   - Go to [GitHub Actions](https://github.com/iwishiwala/devops_task/actions)
+   - Watch the "Infrastructure Changes" workflow
+   - Review the Terraform plan
+
+3. **Apply Changes** (if needed):
+   - Go to [GitHub Actions](https://github.com/iwishiwala/devops_task/actions)
+   - Click "Infrastructure Changes" workflow
+   - Click "Run workflow"
+   - Select "apply" action
+   - Click "Run workflow"
+
+#### **Monitor Deployment**
+- Check GitHub Actions tab for deployment progress
+- Monitor CloudWatch dashboard for metrics
+- Check ECS console for service status
 
 ### Step 6: Access Application
 
@@ -439,6 +508,26 @@ The ECS service is configured for blue-green deployments:
 - ECS automatically manages the transition
 - Zero-downtime deployments
 - Automatic rollback on failure
+
+### Smart Pipeline Triggers
+
+The CI/CD pipeline is optimized for efficiency:
+
+#### **Application Changes Only**
+- **Triggers**: Only when application files change
+- **Files**: `index.js`, `package.json`, `Dockerfile`, `app/**`
+- **Benefit**: Avoids unnecessary deployments for documentation/infrastructure changes
+- **Manual Override**: Force deployment option available
+
+#### **Infrastructure Changes**
+- **Separate Pipeline**: Dedicated workflow for Terraform changes
+- **Safety**: Plan before apply, manual confirmation required
+- **Flexibility**: Multiple action options (plan/apply/destroy)
+
+#### **Documentation Changes**
+- **No Deployment**: Documentation updates don't trigger deployments
+- **Efficiency**: Saves CI/CD minutes and resources
+- **Focus**: Keeps deployment pipeline focused on application changes
 
 ### Health Checks & Validation
 

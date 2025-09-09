@@ -3,8 +3,31 @@ name: Deploy to ECS
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - 'index.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'app/**'
+      - '.github/workflows/deploy-ecs.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'index.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'app/**'
+      - '.github/workflows/deploy-ecs.yml'
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deployment (ignores path filters)'
+        required: false
+        default: 'false'
+        type: boolean
 
 env:
   AWS_REGION: us-east-1
@@ -30,6 +53,28 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    - name: Check deployment conditions
+      id: check-deploy
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force_deploy }}" = "true" ]; then
+          echo "🚀 Force deployment requested - proceeding with deployment"
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "📝 Push/PR event - checking if application files changed"
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
+        else
+          echo "⏭️  No deployment needed - no application changes detected"
+          echo "should_deploy=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Skip deployment if not needed
+      if: steps.check-deploy.outputs.should_deploy == 'false'
+      run: |
+        echo "⏭️  Skipping deployment - no application changes detected"
+        echo "This workflow only deploys when application files are modified."
+        echo "To force deployment, use the 'workflow_dispatch' trigger with 'force_deploy: true'"
+        exit 0
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
