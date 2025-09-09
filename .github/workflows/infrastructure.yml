@@ -1,0 +1,125 @@
+name: Infrastructure Changes
+
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/infrastructure.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/infrastructure.yml'
+  workflow_dispatch:
+    inputs:
+      terraform_action:
+        description: 'Terraform action to perform'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+      auto_approve:
+        description: 'Auto-approve apply/destroy (use with caution)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  AWS_REGION: us-east-1
+  TF_VAR_aws_region: us-east-1
+
+jobs:
+  terraform:
+    name: Terraform ${{ github.event.inputs.terraform_action || 'plan' }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+
+    - name: Terraform Format Check
+      id: fmt
+      run: terraform fmt -check
+      working-directory: ./terraform
+
+    - name: Terraform Init
+      id: init
+      run: terraform init
+      working-directory: ./terraform
+
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+      working-directory: ./terraform
+
+    - name: Terraform Plan
+      id: plan
+      if: github.event.inputs.terraform_action == 'plan' || github.event.inputs.terraform_action == ''
+      run: terraform plan -no-color -out=tfplan
+      working-directory: ./terraform
+
+    - name: Terraform Plan Status
+      if: steps.plan.outcome == 'failure'
+      run: exit 1
+
+    - name: Terraform Apply
+      id: apply
+      if: github.event.inputs.terraform_action == 'apply'
+      run: |
+        if [ "${{ github.event.inputs.auto_approve }}" = "true" ]; then
+          terraform apply -auto-approve
+        else
+          terraform apply
+        fi
+      working-directory: ./terraform
+
+    - name: Terraform Destroy
+      id: destroy
+      if: github.event.inputs.terraform_action == 'destroy'
+      run: |
+        if [ "${{ github.event.inputs.auto_approve }}" = "true" ]; then
+          terraform destroy -auto-approve
+        else
+          terraform destroy
+        fi
+      working-directory: ./terraform
+    - name: Infrastructure Summary
+      if: always()
+      run: |
+        echo "## 🏗️ Infrastructure Workflow Summary"
+        echo "**Action**: ${{ github.event.inputs.terraform_action || 'plan' }}"
+        echo "**Status**: ${{ steps.plan.outcome || steps.apply.outcome || steps.destroy.outcome }}"
+        echo "**Trigger**: ${{ github.event_name }}"
+        echo ""
+        echo "### 📁 Changed Files"
+        echo "The following infrastructure files were modified:"
+        git diff --name-only HEAD~1 HEAD | grep "^terraform/" || echo "No terraform files changed"
+        echo ""
+        echo "### 🔗 AWS Console Links"
+        echo "- [ECS Console](https://console.aws.amazon.com/ecs/)"
+        echo "- [CloudWatch Console](https://console.aws.amazon.com/cloudwatch/)"
+        echo "- [ECR Console](https://console.aws.amazon.com/ecr/)"
+        echo "- [Terraform State](https://console.aws.amazon.com/s3/)"

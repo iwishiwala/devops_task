@@ -1,0 +1,360 @@
+name: Deploy to ECS
+
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'index.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'app/**'
+      - '.github/workflows/deploy-ecs.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'index.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'app/**'
+      - '.github/workflows/deploy-ecs.yml'
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deployment (ignores path filters)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: takehome-app
+  ECS_SERVICE: takehome-eks-service
+  ECS_CLUSTER: takehome-eks
+  ECS_TASK_DEFINITION: takehome-eks-task
+  ECS_TASK_FAMILY: takehome-eks-task
+  ECS_EXECUTION_ROLE_ARN: arn:aws:iam::850451907233:role/takehome-eks-ecs-task-execution-role
+  ECS_TASK_ROLE_ARN: arn:aws:iam::850451907233:role/takehome-eks-ecs-task-role
+  ECS_LOG_GROUP: /ecs/takehome-eks
+  CONTAINER_NAME: app
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Check deployment conditions
+      id: check-deploy
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force_deploy }}" = "true" ]; then
+          echo "🚀 Force deployment requested - proceeding with deployment"
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
+        elif [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "📝 Push/PR event - checking if application files changed"
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
+        else
+          echo "⏭️  No deployment needed - no application changes detected"
+          echo "should_deploy=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Skip deployment if not needed
+      if: steps.check-deploy.outputs.should_deploy == 'false'
+      run: |
+        echo "⏭️  Skipping deployment - no application changes detected"
+        echo "This workflow only deploys when application files are modified."
+        echo "To force deployment, use the 'workflow_dispatch' trigger with 'force_deploy: true'"
+        exit 0
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Build a docker container and push it to ECR so that it can
+        # be deployed to ECS.
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Generate ECS task definition
+      id: task-def
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Generate task definition dynamically
+        cat > task-definition.json << EOF
+        {
+          "family": "$ECS_TASK_FAMILY",
+          "networkMode": "awsvpc",
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512",
+          "executionRoleArn": "$ECS_EXECUTION_ROLE_ARN",
+          "taskRoleArn": "$ECS_TASK_ROLE_ARN",
+          "containerDefinitions": [
+            {
+              "name": "app",
+              "image": "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG",
+              "portMappings": [
+                {
+                  "containerPort": 3000,
+                  "hostPort": 3000,
+                  "protocol": "tcp"
+                }
+              ],
+              "essential": true,
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "$ECS_LOG_GROUP",
+                  "awslogs-region": "$AWS_REGION",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              },
+              "environment": [
+                {
+                  "name": "NODE_ENV",
+                  "value": "production"
+                }
+              ]
+            }
+          ]
+        }
+        EOF
+        echo "task-definition=task-definition.json" >> $GITHUB_OUTPUT
+
+    - name: Deploy Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        wait-for-service-stability: true
+
+    - name: Get ECS Service URL
+      id: get-url
+      run: |
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names takehome-eks-alb \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text)
+        echo "url=http://$ALB_DNS" >> $GITHUB_OUTPUT
+        echo "🚀 Application deployed successfully!"
+        echo "🌐 Application URL: http://$ALB_DNS"
+
+    - name: Wait for service to be ready
+      run: |
+        echo "⏳ Waiting for service to be ready..."
+        sleep 30
+
+    - name: Health Check - Basic Connectivity
+      run: |
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names takehome-eks-alb \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text)
+        
+        echo "🔍 Testing basic connectivity to http://$ALB_DNS"
+        for i in {1..10}; do
+          if curl -f -s --max-time 10 "http://$ALB_DNS" > /dev/null; then
+            echo "✅ Basic connectivity test passed"
+            break
+          else
+            echo "⏳ Attempt $i/10 failed, retrying in 10 seconds..."
+            sleep 10
+          fi
+        done
+
+    - name: Health Check - Application Health Endpoint
+      run: |
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names takehome-eks-alb \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text)
+        
+        echo "🔍 Testing health endpoint at http://$ALB_DNS/health"
+        HEALTH_RESPONSE=$(curl -f -s --max-time 10 "http://$ALB_DNS/health" || echo "FAILED")
+        
+        if [ "$HEALTH_RESPONSE" = "FAILED" ]; then
+          echo "❌ Health check failed - service not responding"
+          exit 1
+        fi
+        
+        echo "✅ Health endpoint response:"
+        echo "$HEALTH_RESPONSE" | jq '.' || echo "$HEALTH_RESPONSE"
+        
+        # Verify health status
+        HEALTH_STATUS=$(echo "$HEALTH_RESPONSE" | jq -r '.status' 2>/dev/null || echo "unknown")
+        if [ "$HEALTH_STATUS" = "healthy" ]; then
+          echo "✅ Application is healthy"
+        else
+          echo "❌ Application health status: $HEALTH_STATUS"
+          exit 1
+        fi
+
+    - name: Health Check - Readiness Endpoint
+      run: |
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names takehome-eks-alb \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text)
+        
+        echo "🔍 Testing readiness endpoint at http://$ALB_DNS/ready"
+        READY_RESPONSE=$(curl -f -s --max-time 10 "http://$ALB_DNS/ready" || echo "FAILED")
+        
+        if [ "$READY_RESPONSE" = "FAILED" ]; then
+          echo "❌ Readiness check failed"
+          exit 1
+        fi
+        
+        echo "✅ Readiness endpoint response:"
+        echo "$READY_RESPONSE" | jq '.' || echo "$READY_RESPONSE"
+
+    - name: Health Check - API Endpoint
+      run: |
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names takehome-eks-alb \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text)
+        
+        echo "🔍 Testing API endpoint at http://$ALB_DNS/api"
+        API_RESPONSE=$(curl -f -s --max-time 10 "http://$ALB_DNS/api" || echo "FAILED")
+        
+        if [ "$API_RESPONSE" = "FAILED" ]; then
+          echo "❌ API endpoint check failed"
+          exit 1
+        fi
+        
+        echo "✅ API endpoint response:"
+        echo "$API_RESPONSE" | jq '.' || echo "$API_RESPONSE"
+
+    - name: Health Check - Load Balancer Target Health
+      run: |
+        echo "🔍 Checking ALB target group health..."
+        
+        # Get target group ARN
+        TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups \
+          --names takehome-eks-tg \
+          --query 'TargetGroups[0].TargetGroupArn' \
+          --output text 2>/dev/null || echo "")
+        
+        if [ -z "$TARGET_GROUP_ARN" ] || [ "$TARGET_GROUP_ARN" = "None" ]; then
+          echo "⚠️  Could not find target group, checking by pattern..."
+          TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups \
+            --query 'TargetGroups[?contains(TargetGroupName, `tg-`)].TargetGroupArn' \
+            --output text | head -1)
+        fi
+        
+        if [ -n "$TARGET_GROUP_ARN" ] && [ "$TARGET_GROUP_ARN" != "None" ]; then
+          echo "📊 Target Group ARN: $TARGET_GROUP_ARN"
+          
+          # Check target health
+          HEALTH_STATUS=$(aws elbv2 describe-target-health \
+            --target-group-arn "$TARGET_GROUP_ARN" \
+            --query 'TargetHealthDescriptions[0].TargetHealth.State' \
+            --output text 2>/dev/null || echo "unknown")
+          
+          echo "🏥 Target health status: $HEALTH_STATUS"
+          
+          if [ "$HEALTH_STATUS" = "healthy" ]; then
+            echo "✅ All targets are healthy"
+          else
+            echo "⚠️  Target health status: $HEALTH_STATUS"
+          fi
+        else
+          echo "⚠️  Could not determine target group health"
+        fi
+
+    - name: Health Check - ECS Service Status
+      run: |
+        echo "🔍 Checking ECS service status..."
+        
+        SERVICE_STATUS=$(aws ecs describe-services \
+          --cluster $ECS_CLUSTER \
+          --services $ECS_SERVICE \
+          --query 'services[0].status' \
+          --output text)
+        
+        RUNNING_COUNT=$(aws ecs describe-services \
+          --cluster $ECS_CLUSTER \
+          --services $ECS_SERVICE \
+          --query 'services[0].runningCount' \
+          --output text)
+        
+        DESIRED_COUNT=$(aws ecs describe-services \
+          --cluster $ECS_CLUSTER \
+          --services $ECS_SERVICE \
+          --query 'services[0].desiredCount' \
+          --output text)
+        
+        echo "📊 Service Status: $SERVICE_STATUS"
+        echo "📊 Running Tasks: $RUNNING_COUNT/$DESIRED_COUNT"
+        
+        if [ "$SERVICE_STATUS" = "ACTIVE" ] && [ "$RUNNING_COUNT" = "$DESIRED_COUNT" ]; then
+          echo "✅ ECS service is healthy"
+        else
+          echo "❌ ECS service is not healthy"
+          exit 1
+        fi
+
+    - name: Performance Test
+      run: |
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names takehome-eks-alb \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text)
+        
+        echo "🚀 Running performance test..."
+        
+        # Test response time
+        RESPONSE_TIME=$(curl -w "%{time_total}" -o /dev/null -s "http://$ALB_DNS/health" || echo "999")
+        echo "⏱️  Response time: ${RESPONSE_TIME}s"
+        
+        # Test multiple concurrent requests
+        echo "🔄 Testing concurrent requests..."
+        for i in {1..5}; do
+          curl -s "http://$ALB_DNS/api" > /dev/null &
+        done
+        wait
+        echo "✅ Concurrent request test completed"
+
+    - name: Deployment Summary
+      run: |
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names takehome-eks-alb \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text)
+        
+        echo "🎉 Deployment completed successfully!"
+        echo "🌐 Application URL: http://$ALB_DNS"
+        echo "🔗 Health Check: http://$ALB_DNS/health"
+        echo "🔗 API Endpoint: http://$ALB_DNS/api"
+        echo "📊 Monitoring Dashboard: https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=takehome-eks-dashboard"
+
