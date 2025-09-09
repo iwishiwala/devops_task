@@ -1,5 +1,10 @@
 name: Infrastructure Changes
 
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
 on:
   push:
     branches: [ main, develop ]
