@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Funky Hello World</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Hello, World!</h1>
+    <p>Welcome to my funky Node.js app 🎉</p>
+    <button onclick="changeColor()">Click me for fun!</button>
+  </div>
+
+  <script>
+    function changeColor() {
+      const colors = ['#ff6b6b','#4ecdc4','#ffe66d','#ff9f1c','#6a0572'];
+      document.body.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+    }
+  </script>
+</body>
+</html>
