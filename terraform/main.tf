@@ -101,7 +101,7 @@ module "ecs" {
   # Container configuration
   container_image = "${module.ecr.repository_url}:latest"
   container_port  = 3000
-  host_port       = 3000  # Must match container_port for Fargate awsvpc mode
+  host_port       = 3000 # Must match container_port for Fargate awsvpc mode
 
   # Free Tier optimized settings
   cpu    = 256 # 0.25 vCPU - well within 40 GB-hours/month
@@ -132,10 +132,10 @@ module "github_oidc" {
 
   # Auto-detects repository from git remote if not specified
   # github_repo = "iwishiwala/devops_task"  # Optional: override auto-detection
-  
+
   # Supports multiple branches
   github_branches = ["main", "develop"]
-  
+
   # Role name (optional, defaults to "github-actions")
   role_name = "github-actions"
 
@@ -149,13 +149,13 @@ module "github_oidc" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  cluster_name      = module.ecs.cluster_name
-  service_name      = module.ecs.service_name
+  cluster_name     = module.ecs.cluster_name
+  service_name     = module.ecs.service_name
   alb_arn          = module.ecs.alb_arn
   target_group_arn = module.ecs.target_group_arn
 
   # Configure alerting (optional)
-  notification_email = ""  # Set your email for alerts
+  notification_email = "" # Set your email for alerts
   # slack_webhook_url = "" # Set Slack webhook URL for alerts
 
   tags = {
