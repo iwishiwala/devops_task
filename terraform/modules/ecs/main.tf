@@ -38,6 +38,12 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Attach secrets access policy
+resource "aws_iam_role_policy_attachment" "secrets_access" {
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = var.secrets_access_policy_arn
+}
+
 # ECS Task Role
 resource "aws_iam_role" "ecs_task_role" {
   name = "${var.cluster_name}-ecs-task-role"

@@ -97,3 +97,26 @@ output "github_branches" {
   description = "GitHub branches that can assume the OIDC role"
   value       = module.github_oidc.github_branches
 }
+
+# Monitoring outputs
+output "monitoring_dashboard_url" {
+  description = "URL of the CloudWatch dashboard"
+  value       = module.monitoring.dashboard_url
+}
+
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic for alerts"
+  value       = module.monitoring.sns_topic_arn
+}
+
+output "alarm_names" {
+  description = "Names of the CloudWatch alarms"
+  value       = module.monitoring.alarm_names
+}
+
+# Secrets outputs
+output "secret_arns" {
+  description = "ARNs of the created secrets"
+  value       = module.secrets.secret_arns
+  sensitive   = true
+}

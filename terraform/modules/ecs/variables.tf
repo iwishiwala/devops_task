@@ -84,6 +84,12 @@ variable "health_check_matcher" {
   default     = "200"
 }
 
+variable "secrets_access_policy_arn" {
+  description = "ARN of the IAM policy for secrets access"
+  type        = string
+  default     = null
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

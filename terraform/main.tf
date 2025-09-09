@@ -117,6 +117,9 @@ module "ecs" {
   # Logging configuration
   log_retention_days = 7
 
+  # Secrets access
+  secrets_access_policy_arn = module.secrets.secrets_access_policy_arn
+
   tags = {
     Environment = "takehome"
     Project     = "devops-takehome"
@@ -141,3 +144,67 @@ module "github_oidc" {
     Project     = "devops-takehome"
   }
 }
+
+# Monitoring and Alerting
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  cluster_name      = module.ecs.cluster_name
+  service_name      = module.ecs.service_name
+  alb_arn          = module.ecs.alb_arn
+  target_group_arn = module.ecs.target_group_arn
+
+  # Configure alerting (optional)
+  notification_email = ""  # Set your email for alerts
+  # slack_webhook_url = "" # Set Slack webhook URL for alerts
+
+  tags = {
+    Environment = "takehome"
+    Project     = "devops-takehome"
+  }
+}
+
+# Secrets Management
+module "secrets" {
+  source = "./modules/secrets"
+
+  # Define application secrets
+  secrets = {
+    "app/database-url" = {
+      description = "Database connection URL"
+      value       = "postgresql://user:password@localhost:5432/mydb"
+      tags = {
+        Environment = "takehome"
+        Project     = "devops-takehome"
+      }
+    }
+    "app/api-key" = {
+      description = "External API key"
+      value       = "your-api-key-here"
+      tags = {
+        Environment = "takehome"
+        Project     = "devops-takehome"
+      }
+    }
+  }
+
+  tags = {
+    Environment = "takehome"
+    Project     = "devops-takehome"
+  }
+}
+
+# HTTPS/TLS (optional - requires domain name)
+# module "https" {
+#   source = "./modules/https"
+#   
+#   domain_name        = "your-domain.com"  # Set your domain name
+#   alb_arn           = module.ecs.alb_arn
+#   alb_listener_arn  = module.ecs.alb_listener_arn
+#   target_group_arn  = module.ecs.target_group_arn
+#   
+#   tags = {
+#     Environment = "takehome"
+#     Project     = "devops-takehome"
+#   }
+# }
