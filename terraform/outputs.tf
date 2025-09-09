@@ -120,3 +120,19 @@ output "secret_arns" {
   value       = module.secrets.secret_arns
   sensitive   = true
 }
+
+# HTTPS outputs (only if domain is configured)
+output "https_enabled" {
+  description = "Whether HTTPS is enabled"
+  value       = var.domain_name != ""
+}
+
+output "certificate_arn" {
+  description = "ARN of the SSL certificate (if HTTPS enabled)"
+  value       = var.domain_name != "" ? module.https[0].certificate_arn : null
+}
+
+output "https_listener_arn" {
+  description = "ARN of the HTTPS listener (if HTTPS enabled)"
+  value       = var.domain_name != "" ? module.https[0].https_listener_arn : null
+}

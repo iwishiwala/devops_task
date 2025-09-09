@@ -141,16 +141,22 @@ module "secrets" {
 }
 
 # HTTPS/TLS (optional - requires domain name)
-# module "https" {
-#   source = "./modules/https"
-#   
-#   domain_name        = "your-domain.com"  # Set your domain name
-#   alb_arn           = module.ecs.alb_arn
-#   alb_listener_arn  = module.ecs.alb_listener_arn
-#   target_group_arn  = module.ecs.target_group_arn
-#   
-#   tags = {
-#     Environment = "takehome"
-#     Project     = "devops-takehome"
-#   }
-# }
+# To enable HTTPS:
+# 1. Get a free domain from freenom.com (e.g., yourname.tk)
+# 2. Set domain_name variable: terraform apply -var="domain_name=yourname.tk"
+# 3. Configure DNS records to point to ALB
+# 4. See docs/https-setup-guide.md for detailed instructions
+module "https" {
+  count = var.domain_name != "" ? 1 : 0
+  source = "./modules/https"
+  
+  domain_name        = var.domain_name
+  alb_arn           = module.ecs.alb_arn
+  alb_listener_arn  = module.ecs.alb_listener_arn
+  target_group_arn  = module.ecs.target_group_arn
+  
+  tags = {
+    Environment = "takehome"
+    Project     = "devops-takehome"
+  }
+}
